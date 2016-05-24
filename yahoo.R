@@ -1,24 +1,26 @@
-# Funktion gibt historische Daten von einschlieÃŸlich 3. Januar 2001 verfÃ¼gbar bis gestern zurÃ¼ck
+#
+# Funktion gibt historische Daten von einschließlich 3. Januar 2001 verfügbar bis gestern zurück
 #
 # Input:
-# aktienSymbol - Aktien-Symbol (siehe Yahoo Finance, z.B. ADS.DE fÃ¼r Adidas AG Xetra), als String
+# aktienSymbol - Aktien-Symbol (siehe Yahoo Finance, z.B. ADS.DE für Adidas AG Xetra), als String
 # startDatum, endDatum - im Format "YYYY-MM-DD", z.B. "2010-12-31", als String
-# diskretisierung - d=tÃ¤gliche Werte, w=wÃ¶chentliche Werte, m=monatliche Werte, v=DividendenausschÃ¼ttungen, als String
+# diskretisierung - d=tägliche Werte, wöchentliche Werte, m=monatliche Werte, v=Dividendenausschüttungen, als String
+# keinVolumen - FALSE=Beobachtungen mit Trade-Volumen gleich 0 werden ausgeschlossen, TRUE=solche Beobachtungen werden mit ausgegeben
 #
 # Quelle: http://brusdeylins.info/tips_and_tricks/yahoo-finance-api/
-
-getHistoricalYahooData <- function(aktienSymbol, startDatum, endDatum, diskretisierung){
+#
+holeHistoricalYahooData <- function(aktienSymbol, startDatum, endDatum, diskretisierung, keinVolumen){
   # gegebenes Start- und Enddatum wird als Datumstyp gecastet
   startDatum <- as.Date(startDatum)
   endDatum <- as.Date(endDatum)
   
-  #Tage und Jahre werden als Character gecastet
+  # Tage und Jahre werden als Character gecastet
   startTagChar <- format(startDatum,"%d")
   startJahrChar <- format(startDatum,"%Y")
   endTagChar <- format(endDatum,"%d")
   endJahrChar <- format(endDatum,"%Y")
   
-  #Monate werden als Integer gecastet, weil sie weiterverarbeitet werden mÃ¼ssen
+  # Monate werden als Integer gecastet, weil sie weiterverarbeitet werden mÃ¼ssen
   startMonatInt <- as.integer(format(startDatum,"%m"))
   endMonatInt <- as.integer(format(endDatum,"%m"))
   
@@ -33,8 +35,68 @@ getHistoricalYahooData <- function(aktienSymbol, startDatum, endDatum, diskretis
   # Gesamte URL wird zusammengesetzt
   url <- paste("http://ichart.finance.yahoo.com/table.csv?s=", aktienSymbol,"&", startDatum, "&", endDatum, "&g=", as.character(diskretisierung), "&ignore=.cvs", sep="")
   
-  return(read.csv(url))
+  # Daten werden als Data.Frame abgelegt
+  data <- read.csv(url, header = TRUE, stringsAsFactors=FALSE)
+  
+  # Beobachtungen mit Trade-Volumen gleich 0 werden ggf. ausgeschlossen
+  if (keinVolumen == FALSE){
+    data <- subset(data, Volume > 0)
+  }
+  
+  return(data)
 }
 
-zeitReiheAdidas <- getHistoricalYahooData("ADS.DE", "2015-5-1", "2016-5-23", "d")
-zeitReiheFresenius <- getHistoricalYahooData("FME.DE", "2015-5-1", "2016-5-23", "d")
+
+#
+# Funktion gibt Liste von Zeitreihen verschiedener Aktien zurück
+#
+# Input:
+# aktienSymbole - Vektor von Aktien-Symbolen (siehe Yahoo Finance, z.B. ADS.DE für Adidas AG Xetra), als String
+# startDatum, endDatum - im Format "YYYY-MM-DD", z.B. "2010-12-31", als String
+# diskretisierung - d=tägliche Werte, wöchentliche Werte, m=monatliche Werte, v=Dividendenausschüttungen, als String
+# keinVolumen - FALSE=Beobachtungen mit Trade-Volumen gleich 0 werden ausgeschlossen, TRUE=solche Beobachtungen werden mit ausgegeben
+#
+holeZeitreihen <- function(aktienSymbole, startDatum, endDatum, diskretisierung, keinVolumen){
+  zeitReihen <- list()
+  for (i in 1:length(aktienSymbole)) {
+    zeitReihen[[i]] <- holeHistoricalYahooData(aktienSymbole[i], startDatum, endDatum, diskretisierung, keinVolumen)
+  }
+  return(zeitReihen)
+}
+
+
+#
+# Funktion gibt für eine Liste von Zeitreihen einen Vektor alle Datums aus, die in allen Zeitreihen vorkommen
+#
+# Input:
+# zeitReihen - Liste von Zeitreihen
+#
+holeDatumsSchnittmenge <- function(zeitReihen){
+  dates1 <- zeitReihen[[1]]$Date
+  for (i in 2:length(zeitReihen)){
+    dates2 <- zeitReihen[[i]]$Date
+    dates1 <- dates1[dates1 %in% dates2]
+  }
+  return(dates1)
+}
+
+
+#
+# Funktion reduziert gegeben Zeitreihen auf gegeben Datums und gibt die reduzierte Zeitreihen zurück
+#
+# Input:
+# zeitReihen - Liste von Zeitreihen
+# datums - Vektor von Datums
+#
+reduziereZeitReihenAufDatums <- function(zeitReihen, datums){
+  for (i in 1:length(zeitReihen)){
+    zeitReihen[[i]] <- zeitReihen[[i]][zeitReihen[[1]]$Date %in% datums,]
+  }
+  return(zeitReihen)
+}
+
+aktienSymbole <- c("ADS.DE","^GDAXI")
+zeitReihen <- holeZeitreihen(aktienSymbole, "2016-05-01", "2016-05-23", "d", FALSE)
+datums <- holeDatumsSchnittmenge(zeitReihen)
+zeitReihen <- reduziereZeitReihenAufDatums(zeitReihen, datums)
+cov(cbind(zeitReihen[[1]]$Adj.Close,zeitReihen[[2]]$Adj.Close))
