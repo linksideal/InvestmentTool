@@ -100,3 +100,5 @@ zeitReihen <- holeZeitreihen(aktienSymbole, "2016-05-01", "2016-05-23", "d", FAL
 datums <- holeDatumsSchnittmenge(zeitReihen)
 zeitReihen <- reduziereZeitReihenAufDatums(zeitReihen, datums)
 cov(cbind(zeitReihen[[1]]$Adj.Close,zeitReihen[[2]]$Adj.Close))
+mean(zeitReihen[[1]]$Adj.Close)
+mean(zeitReihen[[2]]$Adj.Close)
