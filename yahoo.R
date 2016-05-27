@@ -5,11 +5,11 @@
 # aktienSymbol - Aktien-Symbol (siehe Yahoo Finance, z.B. ADS.DE für Adidas AG Xetra), als String
 # startDatum, endDatum - im Format "YYYY-MM-DD", z.B. "2010-12-31", als String
 # diskretisierung - d=tägliche Werte, wöchentliche Werte, m=monatliche Werte, v=Dividendenausschüttungen, als String
-# keinVolumen - FALSE=Beobachtungen mit Trade-Volumen gleich 0 werden ausgeschlossen, TRUE=solche Beobachtungen werden mit ausgegeben
+# keinVolumenEinschliessen - FALSE=Beobachtungen mit Trade-Volumen gleich 0 werden ausgeschlossen, TRUE=solche Beobachtungen werden mit ausgegeben
 #
 # Quelle: http://brusdeylins.info/tips_and_tricks/yahoo-finance-api/
 #
-holeHistoricalYahooData <- function(aktienSymbol, startDatum, endDatum, diskretisierung, keinVolumen){
+holeHistoricalYahooData <- function(aktienSymbol, startDatum, endDatum, diskretisierung, keinVolumenEinschliessen){
   # gegebenes Start- und Enddatum wird als Datumstyp gecastet
   startDatum <- as.Date(startDatum)
   endDatum <- as.Date(endDatum)
@@ -39,7 +39,7 @@ holeHistoricalYahooData <- function(aktienSymbol, startDatum, endDatum, diskreti
   data <- read.csv(url, header = TRUE, stringsAsFactors=FALSE)
   
   # Beobachtungen mit Trade-Volumen gleich 0 werden ggf. ausgeschlossen
-  if (keinVolumen == FALSE){
+  if (keinVolumenEinschliessen == FALSE){
     data <- subset(data, Volume > 0)
   }
   
@@ -54,12 +54,12 @@ holeHistoricalYahooData <- function(aktienSymbol, startDatum, endDatum, diskreti
 # aktienSymbole - Vektor von Aktien-Symbolen (siehe Yahoo Finance, z.B. ADS.DE für Adidas AG Xetra), als String
 # startDatum, endDatum - im Format "YYYY-MM-DD", z.B. "2010-12-31", als String
 # diskretisierung - d=tägliche Werte, wöchentliche Werte, m=monatliche Werte, v=Dividendenausschüttungen, als String
-# keinVolumen - FALSE=Beobachtungen mit Trade-Volumen gleich 0 werden ausgeschlossen, TRUE=solche Beobachtungen werden mit ausgegeben
+# keinVolumenEinschliessen - FALSE=Beobachtungen mit Trade-Volumen gleich 0 werden ausgeschlossen, TRUE=solche Beobachtungen werden mit ausgegeben
 #
-holeZeitreihen <- function(aktienSymbole, startDatum, endDatum, diskretisierung, keinVolumen){
+holeZeitreihen <- function(aktienSymbole, startDatum, endDatum, diskretisierung, keinVolumenEinschliessen){
   zeitReihen <- list()
   for (i in 1:length(aktienSymbole)) {
-    zeitReihen[[i]] <- holeHistoricalYahooData(aktienSymbole[i], startDatum, endDatum, diskretisierung, keinVolumen)
+    zeitReihen[[i]] <- holeHistoricalYahooData(aktienSymbole[i], startDatum, endDatum, diskretisierung, keinVolumenEinschliessen)
   }
   return(zeitReihen)
 }
@@ -90,15 +90,57 @@ holeDatumsSchnittmenge <- function(zeitReihen){
 #
 reduziereZeitReihenAufDatums <- function(zeitReihen, datums){
   for (i in 1:length(zeitReihen)){
-    zeitReihen[[i]] <- zeitReihen[[i]][zeitReihen[[1]]$Date %in% datums,]
+    zeitReihen[[i]] <- zeitReihen[[i]][zeitReihen[[i]]$Date %in% datums,]
   }
   return(zeitReihen)
 }
 
-aktienSymbole <- c("ADS.DE","^GDAXI")
-zeitReihen <- holeZeitreihen(aktienSymbole, "2016-05-01", "2016-05-23", "d", FALSE)
-datums <- holeDatumsSchnittmenge(zeitReihen)
-zeitReihen <- reduziereZeitReihenAufDatums(zeitReihen, datums)
-cov(cbind(zeitReihen[[1]]$Adj.Close,zeitReihen[[2]]$Adj.Close))
-mean(zeitReihen[[1]]$Adj.Close)
-mean(zeitReihen[[2]]$Adj.Close)
+#
+# Funktion gibt bereinigte Zeitreihen verschiedener Aktien als Liste von Data.Frames zurück
+#
+# Input:
+# aktienSymbole - Vektor von Aktien-Symbolen (siehe Yahoo Finance, z.B. ADS.DE für Adidas AG Xetra), als String
+# startDatum, endDatum - im Format "YYYY-MM-DD", z.B. "2010-12-31", als String
+# diskretisierung - d=tägliche Werte, wöchentliche Werte, m=monatliche Werte, v=Dividendenausschüttungen, als String
+# keinVolumenEinschliessen - FALSE=Beobachtungen mit Trade-Volumen gleich 0 werden ausgeschlossen, TRUE=solche Beobachtungen werden mit ausgegeben
+# reduziertAufSchnittmenge - FALSE=Zeitreihen der verschiedenen Aktien können unterschiedliche Datums enthalten, TRUE=Zeitreihen der versch. Aktien enthalten nur die Schnittmenge ihrer Datums
+#
+holeDaten <- function(aktienSymbole, startDatum, endDatum, diskretisierung, keinVolumenEinschliessen, reduziertAufSchnittmenge){
+  zeitReihen <- holeZeitreihen(aktienSymbole, startDatum, endDatum, diskretisierung, keinVolumenEinschliessen)
+  if (reduziertAufSchnittmenge == TRUE){
+    datums <- holeDatumsSchnittmenge(zeitReihen)
+    zeitReihen <- reduziereZeitReihenAufDatums(zeitReihen, datums)
+  }
+  return(zeitReihen)
+}
+
+#
+# Funktion berechnet für gegebene Aktien das Tangency Portfolio aus,
+# wobei zur Schätzung der Erwartung und der Covarianzen der Zeitraum
+# von startDatum bis endDatum mit Diskretisierung diskretisierung verwendet wird.
+# Außerdem wird angemonnen, dass der Risk-Free-Return = 0.
+#
+holeTangecyPortfolio <- function(aktienSymbole, startDatum, endDatum, diskretisierung){
+  zeitReihen <- holeDaten(aktienSymbole, startDatum, endDatum, diskretisierung, FALSE, TRUE)
+  matrix <- cbind(zeitReihen[[1]]$Adj.Close)
+  Mu <- vector(mode = "double", length = length(zeitReihen))
+  Mu[1] <- mean(zeitReihen[[1]]$Adj.Close)
+  for(i in 2:length(zeitReihen)){
+    matrix <- cbind(matrix,zeitReihen[[i]]$Adj.Close)
+    Mu[i] <- mean(zeitReihen[[i]]$Adj.Close)
+  }
+  Epsilon <- cov(matrix)
+  Eins <- seq(1, by=0, length = length(zeitReihen))
+  EpsilonInv <- solve(Epsilon)
+  # Formel für Risk-Free-Return = 0
+  Zaehler <- EpsilonInv %*% Mu 
+  Nenner <- Eins %*% Zaehler
+  return(Zaehler/as.double(Nenner))
+}
+
+
+startDatum <- as.Date("2016-05-01")
+endDatum <- as.Date("2016-05-23")
+aktienSymbole <- c("ADS.DE", "ALV.DE", "BMW.F", "FME.DE")
+
+holeTangecyPortfolio(aktienSymbole, startDatum, endDatum, "d")
