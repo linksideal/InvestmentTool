@@ -10,7 +10,7 @@
 # startDatum, endDatum - im Format "YYYY-MM-DD", z.B. "2010-12-31", als String
 # diskretisierung - d=tägliche Werte, wöchentliche Werte, m=monatliche Werte, v=Dividendenausschüttungen, als String
 #
-holeTangecyPortfolio <- function(aktienSymbole, startDatum, endDatum, diskretisierung){
+holeTangecyPortfolio <- function(aktienSymbole, startDatum, endDatum, diskretisierung, test){
   
   # Bereinigte Daten werden geholt
   zeitReihen <- holeBereinigteZeitreihen(aktienSymbole, startDatum, endDatum, diskretisierung, TRUE, TRUE)
