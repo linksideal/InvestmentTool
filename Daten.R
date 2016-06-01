@@ -9,7 +9,7 @@
 #
 # Quelle: http://brusdeylins.info/tips_and_tricks/yahoo-finance-api/
 #
-holeHistoricalYahooData <- function(aktienSymbol, startDatum, endDatum, diskretisierung, keinVolumenEinschliessen){
+holeZeitreihe <- function(aktienSymbol, startDatum, endDatum, diskretisierung, keinVolumenEinschliessen){
   # gegebenes Start- und Enddatum wird als Datumstyp gecastet
   startDatum <- as.Date(startDatum)
   endDatum <- as.Date(endDatum)
@@ -24,7 +24,7 @@ holeHistoricalYahooData <- function(aktienSymbol, startDatum, endDatum, diskreti
   startMonatInt <- as.integer(format(startDatum,"%m"))
   endMonatInt <- as.integer(format(endDatum,"%m"))
   
-  # Monate mÃ¼ssen im format "00", "01", ..., "11" angegeben werden
+  # Monate müssen im format "00", "01", ..., "11" angegeben werden
   startMonatChar <- formatC(startMonatInt - 1, width = 2, flag = "0")
   endMonatChar <- formatC(endMonatInt - 1, width = 2, flag = "0")
   
@@ -59,7 +59,7 @@ holeHistoricalYahooData <- function(aktienSymbol, startDatum, endDatum, diskreti
 holeZeitreihen <- function(aktienSymbole, startDatum, endDatum, diskretisierung, keinVolumenEinschliessen){
   zeitReihen <- list()
   for (i in 1:length(aktienSymbole)) {
-    zeitReihen[[i]] <- holeHistoricalYahooData(aktienSymbole[i], startDatum, endDatum, diskretisierung, keinVolumenEinschliessen)
+    zeitReihen[[i]] <- holeZeitreihe(aktienSymbole[i], startDatum, endDatum, diskretisierung, keinVolumenEinschliessen)
   }
   return(zeitReihen)
 }
@@ -105,7 +105,7 @@ reduziereZeitReihenAufDatums <- function(zeitReihen, datums){
 # keinVolumenEinschliessen - FALSE=Beobachtungen mit Trade-Volumen gleich 0 werden ausgeschlossen, TRUE=solche Beobachtungen werden mit ausgegeben
 # reduziertAufSchnittmenge - FALSE=Zeitreihen der verschiedenen Aktien können unterschiedliche Datums enthalten, TRUE=Zeitreihen der versch. Aktien enthalten nur die Schnittmenge ihrer Datums
 #
-holeDaten <- function(aktienSymbole, startDatum, endDatum, diskretisierung, keinVolumenEinschliessen, reduziertAufSchnittmenge){
+holeBereinigteZeitreihen <- function(aktienSymbole, startDatum, endDatum, diskretisierung, keinVolumenEinschliessen, reduziertAufSchnittmenge){
   zeitReihen <- holeZeitreihen(aktienSymbole, startDatum, endDatum, diskretisierung, keinVolumenEinschliessen)
   if (reduziertAufSchnittmenge == TRUE){
     datums <- holeDatumsSchnittmenge(zeitReihen)
@@ -114,51 +114,63 @@ holeDaten <- function(aktienSymbole, startDatum, endDatum, diskretisierung, kein
   return(zeitReihen)
 }
 
+#
+#
+#
+holeNaechstenHandelstag <- function(aktienSymbol, datum, vorwaertsSuchen){
+  datum <- as.Date(datum)
+  ersterHandelstag <- tryCatch(
+    {
+      zeitReihe <- holeZeitreihe(aktienSymbol = aktienSymbol, startDatum = datum, endDatum = datum, diskretisierung = "d", keinVolumenEinschliessen = TRUE)
+      if(length(zeitReihe$Date) > 0){
+        zeitReihe$Date
+      }else{
+        stop()
+      }
+    },
+    error = function(cond){
+      if(vorwaertsSuchen == TRUE){
+        return(holeNaechstenHandelstag(aktienSymbol, datum+1, vorwaertsSuchen))
+      }else{
+        return(holeNaechstenHandelstag(aktienSymbol, datum-1, vorwaertsSuchen))
+      }
+    }
+  )
+  return(ersterHandelstag)
+}
 
 #
-# Funktion berechnet für gegebene Aktien das Tangency Portfolio aus,
-# wobei zur Schätzung der Erwartung und der Covarianzen der Zeitraum
-# von startDatum bis endDatum mit Diskretisierung diskretisierung verwendet wird.
-# Außerdem wird angemonnen, dass der Risk-Free-Return = 0.
+# Funktion gibt Adj.Close Wert zu übergebener Aktien zum gegebenen Datum
+# Falls zu gebenem Datum kein Adj.Close Wert vorhanden ist wird nächster
 #
-# aktienSymbole - Vektor von Aktien-Symbolen (siehe Yahoo Finance, z.B. ADS.DE für Adidas AG Xetra), als String
-# startDatum, endDatum - im Format "YYYY-MM-DD", z.B. "2010-12-31", als String
-# diskretisierung - d=tägliche Werte, wöchentliche Werte, m=monatliche Werte, v=Dividendenausschüttungen, als String
+# Input:
+# aktienSymbol - Yahoo Kürzel einer Aktien
+# datum - Datum in der Form "JJJJ-MM-DD"
+# vorwaertsSuchen - FALSE = Letzter verfügbarer Adj.Close Wert wird zurückgegeben,
+#                   TRUE  = Nächster verfügbarer Adj.Close Wert wird zurückgegeben
 #
-holeTangecyPortfolio <- function(aktienSymbole, startDatum, endDatum, diskretisierung){
-  
-  # Bereinigte Daten werden geholt
-  zeitReihen <- holeDaten(aktienSymbole, startDatum, endDatum, diskretisierung, TRUE, TRUE)
-  
-  if (length(aktienSymbole) > length(zeitReihen[[1]]$Date)){
-    warning("!!! Warnung: holeTangecyPortfolio !!! Weniger Beobachtungen als Aktien! Das führt zu Multikoliniearität in der Covarianz-Matrix!")
+holeTagesWert <- function(aktienSymbol, datum, vorwaertsSuchen){
+  datum <- holeNaechstenHandelstag(aktienSymbol = aktienSymbol, datum = datum, vorwaertsSuchen = vorwaertsSuchen)
+  return(holeZeitreihe(aktienSymbol = aktienSymbol, startDatum = datum, endDatum = datum, diskretisierung = "d", keinVolumenEinschliessen = TRUE)$Adj.Close)
+}
+
+#
+# Funktion gibt Adj. Close Wert zu übergebenem Array von Aktien zum gegebenem Datum
+#
+# Input:
+# aktienSymbole - Array von Aktien
+# datum - Datum in der Form "JJJJ-MM-DD"
+#
+holeTagesWerte <- function(aktienSymbole, datum, vorwaertsSuchen, gleichzeitig){
+  if( gleichzeitig == FALSE ){
+    return(sapply(aktienSymbole, holeTagesWert, datum = datum, vorwaertsSuchen = vorwaertsSuchen, simplify = TRUE))
+  }else{
+    naechsterHandelstage <- sapply(aktienSymbole, holeNaechstenHandelstag, datum = datum, vorwaertsSuchen = vorwaertsSuchen, simplify = TRUE)
+    if(vorwaertsSuchen == TRUE){
+      naechsterHandelstag = max(naechsterHandelstage)
+    }else{
+      naechsteHandelstag = min(naechsterHandelstage)
+    }
+    return(sapply(aktienSymbole, holeTagesWert, datum = naechsterHandelstag, vorwaertsSuchen = vorwaertsSuchen, simplify = TRUE))
   }
-  
-  # Adjusted-Close-Matrix anlegen; erste Spalte beinhaltet die Adjusted Close Werte der ersten Aktie
-  matrix <- cbind(zeitReihen[[1]]$Adj.Close)
-  
-  # Erwartungswert-Vektor anlegen
-  Mu <- vector(mode = "double", length = length(zeitReihen))
-  # Erster Eintrag ist Erwartungswert des Adjusted-Close der ersten Aktie
-  Mu[1] <- mean(zeitReihen[[1]]$Adj.Close)
-  
-  # alle übrigen Komponenten der Matrix und der Vektors werden belegt
-  for(i in 2:length(zeitReihen)){
-    matrix <- cbind(matrix,zeitReihen[[i]]$Adj.Close)
-    Mu[i] <- mean(zeitReihen[[i]]$Adj.Close)
-  }
-  
-  # Covarianz Matrix der Matrix wird berechnet
-  Epsilon <- cov(matrix)
-  
-  # Invertieren der Covarianz Matrix
-  EpsilonInv <- solve(Epsilon)
-  
-  # Vektor aus Einsen
-  Eins <- seq(1, by=0, length = length(zeitReihen))
-  
-  # Tangency-Portfolio-Formel für Risk-Free-Return = 0
-  Zaehler <- EpsilonInv %*% Mu 
-  Nenner <- Eins %*% Zaehler
-  return(Zaehler/as.double(Nenner))
 }
