@@ -1,3 +1,4 @@
+#Kommentar
 
 #
 # Funktion berechnet für gegebene Aktien das Tangency Portfolio aus,
