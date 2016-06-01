@@ -10,7 +10,7 @@
 # startDatum, endDatum - im Format "YYYY-MM-DD", z.B. "2010-12-31", als String
 # diskretisierung - d=tägliche Werte, wöchentliche Werte, m=monatliche Werte, v=Dividendenausschüttungen, als String
 #
-holeTangecyPortfolio <- function(aktienSymbole, startDatum, endDatum, diskretisierung, test){
+holeTangecy1 <- function(aktienSymbole, startDatum, endDatum, diskretisierung, test){
   
   # Bereinigte Daten werden geholt
   zeitReihen <- holeBereinigteZeitreihen(aktienSymbole, startDatum, endDatum, diskretisierung, TRUE, TRUE)
@@ -53,7 +53,7 @@ holeTangecyPortfolio <- function(aktienSymbole, startDatum, endDatum, diskretisi
 # mit gewichte gewichtet sind, zum startDatum gekauft und zum endDatum verkauft werden
 #
 holePortfolioReturn <- function(aktienSymbole, gewichte, startDatum, endDatum){
-  einkaufsPreis <- sum(holeTagesWerte(aktienSymbole, startDatum, TRUE, TRUE)*gewichte)
+  einkaufs2 <- sum(holeTagesWerte(aktienSymbole, startDatum, TRUE, TRUE)*gewichte)
   verkaufsPreis <- sum(holeTagesWerte(aktienSymbole, endDatum, TRUE, TRUE)*gewichte)
   return((verkaufsPreis-einkaufsPreis)/einkaufsPreis)
 }
